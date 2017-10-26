@@ -2,19 +2,24 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
+// #include <sys/types.h>
 #include <sys/wait.h>
 
 char *readline (const char *prompt);
 
 typedef struct {
     char **args;
+    // char *input;
+    // char *output;
 } cmd;
 
 // parse cmd from command line input
 cmd *cmd_init(cmd *cmd, char *line) {
     int numArgs = 0;
     char *arg;
+    // initialize an emptyString for later comparison
+    // char *emptyString = malloc(sizeof(char));
+    // emptyString = "";
     cmd->args = malloc(sizeof(char *) * (numArgs + 1));
     while ((arg = strsep(&line, " ")) != NULL) {
         char *emptyString = "";
@@ -25,7 +30,6 @@ cmd *cmd_init(cmd *cmd, char *line) {
         }
     }
     cmd->args[numArgs] = 0;
-    // free after finish using ....
     // free(emptyString);
     free(arg);
     return cmd;
@@ -41,6 +45,7 @@ int main(int argc, char **argv) {
     while (1) {
         char *line, *token;
         line = readline("myshell>");
+        // separate command line input by ";" -> exec commands sequentially
         while ((token = strsep(&line, ";")) != NULL) {
             int childStatus;
             pid_t pid;
