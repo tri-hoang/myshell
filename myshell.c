@@ -2,51 +2,42 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-// #include <sys/types.h>
 #include <sys/wait.h>
 
 char *readline (const char *prompt);
 
 typedef struct {
     char **args;
-    // char *input;
-    // char *output;
 } cmd;
 
-// parse cmd from command line input
-cmd *cmd_init(cmd *cmd, char *line) {
-    int numArgs = 0;
+void cmd_exec(cmd *cmd) {
+    execvp(cmd->args[0], cmd->args);
+}
+
+cmd *cmd_init(char *string) {
+    int numArg = 0;
     char *arg;
-    // initialize an emptyString for later comparison
-    // char *emptyString = malloc(sizeof(char));
-    // emptyString = "";
-    cmd->args = malloc(sizeof(char *) * (numArgs + 1));
-    while ((arg = strsep(&line, " ")) != NULL) {
+    cmd *cmd;
+    cmd->args = malloc(sizeof(char *) * (numArg + 1));
+    while ((arg = strsep(&string, " ")) != NULL) {
+        // might need fixing ..
         char *emptyString = "";
         if (strcmp(arg, emptyString) != 0) {
-            cmd->args[numArgs] = arg;
-            numArgs ++;
-            cmd->args = realloc(cmd->args, sizeof(char *) * (numArgs + 1));
+            cmd->args[numArg] = arg;
+            numArg ++;
+            cmd->args = realloc(cmd->args, sizeof(char * ) * (numArg + 1));
         }
     }
-    cmd->args[numArgs] = 0;
-    // free(emptyString);
-    free(arg);
+    cmd->args[numArg] = NULL;
     return cmd;
 }
 
-// execute cmd
-void cmd_exec(cmd *cmd) {
-    char *command = cmd->args[0];
-    execvp(command, cmd->args);
-}
-
 int main(int argc, char **argv) {
-    while (1) {
-        char *line, *token;
-        line = readline("myshell>");
-        // separate command line input by ";" -> exec commands sequentially
-        while ((token = strsep(&line, ";")) != NULL) {
+    while(1) {
+        char *lineInput = (char *)NULL;
+        char *token;
+        lineInput = readline("myshell>");
+        while ((token = strsep(&lineInput, ";")) != NULL) {
             int childStatus;
             pid_t pid;
             pid = fork();
@@ -54,18 +45,18 @@ int main(int argc, char **argv) {
                 // fork error
             }
             else if (pid == 0) {
-                // child process
                 cmd *cmd;
-                cmd_init(cmd, token);
+                cmd = cmd_init(token);
                 cmd_exec(cmd);
             }
             else {
-                // parent process
                 waitpid(pid, &childStatus, WUNTRACED);
             }
         }
-        // free *line and *token after finish using
+        // set to NULL and free after finish using..
+        lineInput = NULL;
+        token = NULL;
+        free(lineInput);
         free(token);
-        free(line);
     }
 }
