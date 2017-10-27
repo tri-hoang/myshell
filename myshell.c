@@ -5,17 +5,26 @@
 #include <sys/wait.h>
 
 char *readline (const char *prompt);
+char *strip_whitespace(char *string);
 
 typedef struct {
     char **args;
     char *input;
     char *output;
+    char *error;
 } cmd;
 
+// execute cmd
 void cmd_exec(cmd *cmd) {
     execvp(cmd->args[0], cmd->args);
 }
 
+// take a string input from user's command line input
+// initialize cmd struct based on given string: 
+// - cmd-> args is an array of strings (with the last string = NULL) = arguments provide for execvp
+// - cmd->input is the path to redirect input (if none provided cmd->input = NULL)
+// - cmd->output is the path to redirect output (if none provided cmd->output = NULL)
+// - cmd->error is the path to redirect error (if none provided cmd->error = NULL)
 cmd *cmd_init(char *lineInput) {
     char *cmdArgs;
     if ((cmdArgs = malloc(strlen(lineInput) + 1)) == NULL) {
@@ -29,14 +38,24 @@ cmd *cmd_init(char *lineInput) {
     const char i_redirection[2] = "<";
     const char e_redirection[3] = "2>";
     const char o1_redirection[3] = "1>";
+    const char oe_redirection[3] = "&>";
+    int same_oe = 0;
+    int error_redir = 0;
+    // assume user will use only one of the four ">", "1>", "&>", "2>"
+    // if there are both "<" and "?>" in the command line input
     if (strstr(cmdArgs, o_redirection) != NULL && strstr(cmdArgs, i_redirection) != NULL) {
         size_t o_length = strlen(strstr(cmdArgs, o_redirection));
         size_t i_length = strlen(strstr(cmdArgs, i_redirection));
+        // "?>" occurs before "<"
         if (o_length > i_length) {
             if (strstr(cmdArgs, o1_redirection) != NULL) {
                 cmdArgs = strsep(&cmdArgs, o1_redirection);
             }
-            else if (strstr(cmdArgs, e_redirection) != NULL) { 
+            else if (strstr(cmdArgs, oe_redirection) != NULL) {
+                cmdArgs = strsep(&cmdArgs, oe_redirection);
+                same_oe = 1;
+            }
+            else if (strstr(cmdArgs, e_redirection) != NULL) {
                 cmdArgs = strsep(&cmdArgs, e_redirection);
             }
             else {
@@ -47,9 +66,13 @@ cmd *cmd_init(char *lineInput) {
             char *cpyString = malloc(strlen(temp) + 1);
             strcpy(cpyString, temp);
             cmd->output = strsep(&temp, i_redirection);
+            cmd->error = NULL;
+            printf("I'm here\n");
             cmd->input = strsep(&cpyString, i_redirection);
             cmd->input = strsep(&cpyString, i_redirection);
+            if (same_oe == 1) { cmd->error = cmd->output; }
         }
+        // "<" occurs before "?>"
         else {
             cmdArgs = strsep(&cmdArgs, i_redirection);
             strsep(&lineInput, i_redirection);
@@ -59,6 +82,10 @@ cmd *cmd_init(char *lineInput) {
             if (strstr(temp, o1_redirection) != NULL) {
                 cmd->input = strsep(&temp, o1_redirection);
             }
+            else if (strstr(temp, oe_redirection) != NULL) {
+                cmd->input = strsep(&temp, oe_redirection);
+                same_oe = 1;
+            }
             else if (strstr(temp, e_redirection) != NULL) {
                 cmd->input = strsep(&temp, e_redirection);
             }
@@ -67,14 +94,21 @@ cmd *cmd_init(char *lineInput) {
             }
             cmd->output = strsep(&cpyString, o_redirection);
             cmd->output = strsep(&cpyString, o_redirection);
+            cmd->error = NULL;
+            if (same_oe == 1) { cmd->error = cmd->output; }
         }
     }
+    // if there is only "?>"
     else if (strstr(cmdArgs, o_redirection) != NULL) {
         cmd->input = NULL;
         if (strstr(cmdArgs, o1_redirection) != NULL) {
             cmdArgs = strsep(&cmdArgs, o1_redirection);
         }
-        else if (strstr(cmdArgs, e_redirection) != NULL) { 
+        else if (strstr(cmdArgs, oe_redirection) != NULL) {
+            cmdArgs = strsep(&cmdArgs, oe_redirection);
+            same_oe = 1;
+        }
+        else if (strstr(cmdArgs, e_redirection) != NULL) {
             cmdArgs = strsep(&cmdArgs, e_redirection);
         }
         else {
@@ -82,19 +116,27 @@ cmd *cmd_init(char *lineInput) {
         }
         strsep(&lineInput, o_redirection);
         cmd->output = strsep(&lineInput, o_redirection);
+        cmd->error = NULL;
+        if (same_oe == 1) { cmd->error = cmd->output; }
     }
+    // if there is only "<"
     else if (strstr(cmdArgs, i_redirection) != NULL) {
         cmd->output = NULL;
+        cmd->error = NULL;
         cmdArgs = strsep(&cmdArgs, i_redirection);
         cmd->input = strsep(&lineInput, i_redirection);
         cmd->input = strsep(&lineInput, i_redirection);
     }
+    // if there is neither "<" nor "?>"
     else {
         cmd->output = NULL;
         cmd->input = NULL;
     }
+    if (cmd->output != NULL) { cmd->output = strip_whitespace(cmd->output); }
+    if (cmd->input != NULL) { cmd->input = strip_whitespace(cmd->input); }
+    if (cmd->error != NULL) { cmd->error = strip_whitespace(cmd->error); }
     printf("\nCHECKING HERE: ...\n");
-    printf("cmdArg is : %s\ncmd->output is : %s\ncmd->input is : %s\n", cmdArgs, cmd->output, cmd->input);
+    printf("cmdArg is : %s\ncmd->output is : %s\ncmd->input is : %s\ncmd->error is : %s\n", cmdArgs, cmd->output, cmd->input, cmd->error);
     
     char *arg;
     while ((arg = strsep(&cmdArgs, " ")) != NULL) {
@@ -110,11 +152,28 @@ cmd *cmd_init(char *lineInput) {
     return cmd;
 }
 
+// helper function to remove whitespace
+char *strip_whitespace(char *string) {
+    char *end;
+    while(isspace((unsigned char)*string)) string++;
+    if(*string ==0) { return string; }
+    end = string + strlen(string) - 1;
+    while (end > string && isspace((unsigned char)*end)) end--;
+    *(end + 1) = 0;
+    return string;
+}
+
 int main(int argc, char **argv) {
     while(1) {
         char *lineInput = (char *)NULL;
         char *token;
+        // read input from user
         lineInput = readline("myshell>");
+        // split user's input line with delimiter ";" into commands
+        // i.e: given string:   this is a command ; this is another command 
+        // -> output:           token = this is a command
+        //                      token = this is another command
+        //                      -> execute each command sequentially
         while ((token = strsep(&lineInput, ";")) != NULL) {
             int childStatus;
             pid_t pid;
@@ -131,6 +190,7 @@ int main(int argc, char **argv) {
                 waitpid(pid, &childStatus, WUNTRACED);
             }
         }
+        // free pointers and set to NULL after finish using..
         lineInput = NULL;
         token = NULL;
         free(lineInput);
