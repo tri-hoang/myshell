@@ -3,7 +3,7 @@
 all: myshell
 
 myshell: myshell.c
-	gcc myshell.c -lreadline; mv a.out myshell
+	gcc myshell.c -lreadline -o myshell
 
 clean:
 	-rm myshell
