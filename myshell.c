@@ -61,22 +61,33 @@ void exec_cmd_pipe(cmd *cmd) {
 //              execvp(x[0], x)
 void cmd_exec(cmd *cmd) {
     /* Set output and input appropriately */
+    int i = dup(0), o = dup(1);
     if (cmd->input != NULL) {
+        printf("INPUT\n");
         int fd = open ( cmd->input, O_RDONLY);
+        // int save = dup(0);
         dup2(fd, 0);
         close(fd);
+        // dup2(save, 0);
     }
     else if (cmd->output != NULL) {
+        printf("OUTPUT\n");
         int fd = open ( cmd->output, O_APPEND | O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IXUSR);
         dup2(fd, 1);
         close(fd);
     }
     else if (cmd->error != NULL) {
+        printf("ERROR\n");
         int fd = open ( cmd->error, O_APPEND | O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IXUSR);
         dup2(fd, 2);
         close(fd);
     }
 
+    int BG_FLAG = 0, stat;
+    char *lastCmd = strip_whitespace(cmd->cmd_array[cmd->size-1]);
+    if (lastCmd[strlen(lastCmd-1)] == '&') {
+        BG_FLAG = 1;
+    }
 
     // parse_input_command will parse an array of string -> an array of string to be called by execvp
     // i.e: input: [["   ls -a "], ["ps"],["cat file "]]
@@ -87,6 +98,8 @@ void cmd_exec(cmd *cmd) {
     } else {
         exec_cmd_pipe(cmd);
     }
+
+    dup2(i, 0); dup2(o, 1);
 
     // test -> function works .. need to add more to this (y)
     //execvp(cmd->args[0], cmd->args);
