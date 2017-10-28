@@ -23,27 +23,6 @@ typedef struct {
     char *error;
 } cmd;
 
-void pipe_2_programs(char** first, char** second) {
-    int fd[2];
-    pid_t pid;
-    pipe(fd);
-    pid = fork();
-
-    /* Child process, redirect stdout to pipe and exec the first cmd */
-    if (pid == 0) {
-        close(fd[0]);
-        dup2(fd[1], 1);
-        execvp(first[0], first);
-        
-    }
-    /* Parent process, take data from pipe as stdin and exec the second cmd */
-    else {
-        close(fd[1]);
-        dup2(fd[0], 0);
-        execvp(second[0], second);
-    }
-}
-
 void exec_cmd_pipe(cmd *cmd) {
     int i, j, k, stat, nPipes = cmd->size - 1;
 
