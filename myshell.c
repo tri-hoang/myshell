@@ -37,6 +37,24 @@ typedef struct {
 //              parse_input_command(x)
 //              execvp(x[0], x)
 void cmd_exec(cmd *cmd) {
+    /* Set output and input appropriately */
+    if (cmd->input != NULL) {
+        printf("%s\n", "CHANGING INPUT");
+        int fd = open ( cmd->input, O_RDONLY);
+        dup2(fd, 0);
+    }
+    else if (cmd->output != NULL) {
+        int fd = open ( cmd->output, O_APPEND | O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IXUSR);
+        dup2(fd, 1);
+        close(fd);
+    }
+    else if (cmd->error != NULL) {
+        int fd = open ( cmd->error, O_APPEND | O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IXUSR);
+        dup2(fd, 2);
+        close(fd);
+    }
+
+
     // parse_input_command will parse an array of string -> an array of string to be called by execvp
     // i.e: input: [["   ls -a "], ["ps"],["cat file "]]
     //      output: [["ls","-a",NULL],["ps", NULL], ["cat", "file", NULL]]     
