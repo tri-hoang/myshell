@@ -3,7 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <sys/wait.h>
+#include <sys/resource.h>
 
 char *readline (const char *prompt);
 char *strip_whitespace(char *string);
@@ -155,9 +157,12 @@ void cmd_exec(cmd *cmd) {
     //      output: [["ls","-a",NULL],["ps", NULL], ["cat", "file", NULL]]
     if (cmd->size == 1) {
         if (cmd->BG_FLAG) {
-            if (fork() == 0) {
+            pid_t pid = fork();
+            if (pid == 0) {
                 char **test = parse_input_command(cmd->cmd_array[0]);
                 execvp(test[0], test);
+            } else {
+                printf("%d\n", pid);
             }
         } else {
             char **test = parse_input_command(cmd->cmd_array[0]);
@@ -393,12 +398,46 @@ char *strip_whitespace(char *string) {
     return string;
 }
 
+void proc_exit()
+{
+        int wstat;
+        // union wait wstat;
+        pid_t   pid;
+
+        while (1) {
+            pid = wait3 (&wstat, WNOHANG, (struct rusage *)NULL );
+            if (pid == 0) {
+                printf("Exited");
+                return;
+            }
+            else if (pid == -1)
+                return;
+            else
+                //printf ("Return code: %d\n", wstat.w_retcode);
+                fprintf(stdout, "Child process terminated %d\nmyshell>", pid);
+        }
+}
+
+void sig_handler(int signo) {
+    if (signo == SIGINT) {
+        fprintf(stderr, "%s\n", "Interrupted");
+        return;
+    }
+    else if (signo == SIGCHLD) {
+        proc_exit();
+        // fprintf(stderr, "%s\n", );  
+    }
+}
+
 int main(int argc, char **argv) {
     while(1) {
+        signal(SIGINT, sig_handler);
+        
         char *lineInput = (char *)NULL;
         char *token;
         // read input from user
         lineInput = readline("myshell>");
+        signal(SIGCHLD, sig_handler);
         // split user's input line with delimiter ";" into commands
         // i.e: given string:   this is a command ; this is another command 
         // -> output:           token = this is a command
@@ -421,7 +460,9 @@ int main(int argc, char **argv) {
                 cmd_exec(cmd); 
             }
             else {
-                waitpid(pid, &childStatus, WUNTRACED);
+                int stat;
+                wait(&stat);
+                // waitpid(pid, &childStatus, WUNTRACED);
             }
         }
         // free pointers and set to NULL after finish using..
