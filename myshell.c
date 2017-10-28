@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
 #include <sys/wait.h>
 
 char *readline (const char *prompt);
@@ -22,6 +23,49 @@ typedef struct {
     char *error;
 } cmd;
 
+void pipe_2_programs(char** first, char** second) {
+    int fd[2];
+    pid_t pid;
+    pipe(fd);
+    pid = fork();
+
+    /* Child process, redirect stdout to pipe and exec the first cmd */
+    if (pid == 0) {
+        close(fd[0]);
+        dup2(fd[1], 1);
+        execvp(first[0], first);
+        
+    }
+    /* Parent process, take data from pipe as stdin and exec the second cmd */
+    else {
+        close(fd[1]);
+        dup2(fd[0], 0);
+        execvp(second[0], second);
+    }
+}
+
+void exec_cmd_pipe(cmd *cmd) {
+    int i, j, k, stat, nPipes = cmd->size - 1;
+
+    /* Initialize pipes */
+    int pipes[2 * nPipes];
+    for (i = 0; i < nPipes; i++) pipe(pipes + i*2);
+
+    /* Run through commands */
+    for (i = 0; i < cmd->size; i++) {
+        j = i * 2;
+        if (fork() == 0) {
+            if (i != cmd->size) dup2(pipes[j+1], 1);
+            if (i != 0) dup2(pipes[j-2], 0);
+            for (k = 0; k < 2 * nPipes; k++) close(pipes[k]);
+            char **cmd_p = parse_input_command(cmd->cmd_array[i]);
+            execvp(cmd_p[0], cmd_p);
+        }
+    }
+    for (i = 0; i < 2 * nPipes; i++) close(pipes[i]);
+    for (i = 0; i < nPipes; i++) wait(&stat);
+}
+
 // execute cmd
 // should use a loop to loop through cmd->cmd_array
 // usage should be sth like: 
@@ -39,9 +83,9 @@ typedef struct {
 void cmd_exec(cmd *cmd) {
     /* Set output and input appropriately */
     if (cmd->input != NULL) {
-        printf("%s\n", "CHANGING INPUT");
         int fd = open ( cmd->input, O_RDONLY);
         dup2(fd, 0);
+        close(fd);
     }
     else if (cmd->output != NULL) {
         int fd = open ( cmd->output, O_APPEND | O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IXUSR);
@@ -57,9 +101,14 @@ void cmd_exec(cmd *cmd) {
 
     // parse_input_command will parse an array of string -> an array of string to be called by execvp
     // i.e: input: [["   ls -a "], ["ps"],["cat file "]]
-    //      output: [["ls","-a",NULL],["ps", NULL], ["cat", "file", NULL]]     
-    char **test = parse_input_command(cmd->cmd_array[0]);
-    execvp(test[0], test);
+    //      output: [["ls","-a",NULL],["ps", NULL], ["cat", "file", NULL]]
+    if (cmd->size == 1) {
+        char **test = parse_input_command(cmd->cmd_array[0]);
+        execvp(test[0], test);
+    } else {
+        exec_cmd_pipe(cmd);
+    }
+
     // test -> function works .. need to add more to this (y)
     //execvp(cmd->args[0], cmd->args);
 }
