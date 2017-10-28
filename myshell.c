@@ -8,6 +8,7 @@
 char *readline (const char *prompt);
 char *strip_whitespace(char *string);
 char **parse_input_command(char *string); 
+// int BG_FLAG = 0;
 
 typedef struct {
     char **array;
@@ -15,12 +16,14 @@ typedef struct {
 } cmd_array;
 
 typedef struct {
+    char *original;
     char **args; // deprecated
     char **cmd_array;
     int size;
     char *input;
     char *output;
     char *error;
+    int BG_FLAG;
 } cmd;
 
 void exec_cmd_pipe(cmd *cmd) {
@@ -43,6 +46,51 @@ void exec_cmd_pipe(cmd *cmd) {
     }
     for (i = 0; i < 2 * nPipes; i++) close(pipes[i]);
     for (i = 0; i < nPipes; i++) wait(&stat);
+}
+
+// int is_BG(cmd *cmd) {
+//     printf("ISBG_1\n");
+//     char *input = strip_whitespace(cmd->input);
+//     char *output = strip_whitespace(cmd->output);
+//     char *error = strip_whitespace(cmd->error);
+//     printf("ISBG_2\n");
+//     if ((input != NULL && input[strlen(input) - 1] == '&')
+//         || (output != NULL && output[strlen(output) - 1] == '&')
+//         || (error != NULL && error[strlen(error) - 1] == '&'))
+//         return 1;
+//     return 0;
+// }
+
+int is_BG(cmd *cmd) {
+    if (cmd->cmd_array[cmd->size - 1] != NULL) {
+        char *lastCmd = strip_whitespace(cmd->cmd_array[cmd->size - 1]);
+        if (lastCmd[strlen(lastCmd) - 1] == '&') {
+            lastCmd[strlen(lastCmd) - 1] = '\0';
+            return 1;
+        }
+    }
+    if (cmd->input != NULL) {
+        char *input = strip_whitespace(cmd->input);
+        if (input[strlen(input) - 1] == '&') {
+            input[strlen(input) - 1] = '\0';
+            return 1;
+        }
+    }
+    if (cmd->output != NULL) {
+        char *output = strip_whitespace(cmd->output);
+        if (output[strlen(output) - 1] == '&') {
+            output[strlen(output) - 1] = '\0';
+            return 1;
+        }
+    }
+    if (cmd->error != NULL) {
+        char *error = strip_whitespace(cmd->error);
+        if (error[strlen(error) - 1] == '&') {
+            error[strlen(error) - 1] = '\0';
+            return 1;
+        }
+    }
+    return 0;
 }
 
 // execute cmd
@@ -81,20 +129,41 @@ void cmd_exec(cmd *cmd) {
         int fd = open ( cmd->error, O_APPEND | O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IXUSR);
         dup2(fd, 2);
         close(fd);
+    } else if (cmd->output != NULL && strcmp(cmd->output, cmd->error) == 0) {
+        int fd = open ( cmd->output, O_APPEND | O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IXUSR);
+        dup2(fd, 1);
+        dup2(fd, 2);
+        close(fd);
     }
 
-    int BG_FLAG = 0, stat;
-    char *lastCmd = strip_whitespace(cmd->cmd_array[cmd->size-1]);
-    if (lastCmd[strlen(lastCmd-1)] == '&') {
-        BG_FLAG = 1;
-    }
+
+    // // int BG_FLAG = 0;
+    int stat;
+    printf("Check 1\n");
+    // printf("%s | %s | %s\n", cmd->input, cmd->output, cmd->error);
+    cmd->BG_FLAG = is_BG(cmd);
+    printf("Check 2 %i\n", cmd->BG_FLAG);
+    // char *lastCmd = strip_whitespace(cmd->cmd_array[cmd->size-1]);
+    // // printf("%s\n", lastCmd);
+    // if (lastCmd[strlen(lastCmd)-1] == '&') {
+    //     printf("Is BG\n");
+    //     cmd->BG_FLAG = 1;
+    // }
 
     // parse_input_command will parse an array of string -> an array of string to be called by execvp
     // i.e: input: [["   ls -a "], ["ps"],["cat file "]]
     //      output: [["ls","-a",NULL],["ps", NULL], ["cat", "file", NULL]]
     if (cmd->size == 1) {
-        char **test = parse_input_command(cmd->cmd_array[0]);
-        execvp(test[0], test);
+        if (cmd->BG_FLAG) {
+            if (fork() == 0) {
+                char **test = parse_input_command(cmd->cmd_array[0]);
+                execvp(test[0], test);
+            }
+        } else {
+            char **test = parse_input_command(cmd->cmd_array[0]);
+            execvp(test[0], test);
+        }
+        // wait(&stat);
     } else {
         exec_cmd_pipe(cmd);
     }
@@ -103,31 +172,6 @@ void cmd_exec(cmd *cmd) {
 
     // test -> function works .. need to add more to this (y)
     //execvp(cmd->args[0], cmd->args);
-}
-
-// helper function for parsing "|"
-// input: "ls -a | pipe | to | somewhere | else"
-// output: [["ls -a "], [" pipe "], [" to ]", [" somewhere "] , [" else "]]
-cmd_array process_pipe(char *lineInput) {
-    const char pipe_symbol[2] = "|";
-    char *copy_input;
-    if ((copy_input = malloc(strlen(lineInput) + 1)) == NULL) {
-        fprintf(stderr, "malloc fails");
-    }
-    strcpy(copy_input, lineInput);
-    cmd_array cmd_array;
-    cmd_array.size = 0;
-    cmd_array.array = malloc(sizeof(char *) * (cmd_array.size + 1));
-    char *cmd_string;
-    while ((cmd_string = strsep(&copy_input, "|")) != NULL) {
-        char *emptyString = "";
-        if (strcmp(cmd_string, emptyString) != 0) {
-            cmd_array.array[cmd_array.size] = cmd_string;
-            cmd_array.size ++;
-            cmd_array.array = realloc(cmd_array.array, sizeof(char *) * (cmd_array.size + 1));
-        }
-    }
-    return cmd_array;
 }
 
 // take a string input from user's command line input
@@ -140,6 +184,21 @@ cmd_array process_pipe(char *lineInput) {
 // - cmd->output is the path to redirect output (if none provided cmd->output = NULL)
 // - cmd->error is the path to redirect error (if none provided cmd->error = NULL)
 cmd *cmd_init(char *lineInput) {
+    // Set & flag
+    // char *cmdArgs2;
+    // if ((cmdArgs2 = malloc(strlen(lineInput) + 1)) == NULL) {
+    //     fprintf(stderr, "malloc fails");
+    // }
+    // strcpy(cmdArgs2, lineInput);
+    // cmdArgs2 = strip_whitespace(cmdArgs2);
+    // if (lineInput[strlen(lineInput)-1] == '&') BG_FLAG = 1;
+    // printf("%c\n", cmdArgs2[strlen(cmdArgs2)-1] );
+    // lineInput = strip_whitespace(lineInput);
+    // int i;
+    // while (lineInput[i] != '\0') i++;
+    // char a = lineInput[i - 1];
+
+
     char *cmdArgs;
     if ((cmdArgs = malloc(strlen(lineInput) + 1)) == NULL) {
         fprintf(stderr, "malloc fails");
@@ -302,6 +361,7 @@ cmd *cmd_init(char *lineInput) {
     //   }
     //}
     //cmd->args[numArg] = NULL;
+    // printf("LINEINPUT:   %s\n", lineInput);
     return cmd;
 }
 
@@ -353,6 +413,10 @@ int main(int argc, char **argv) {
             }
             else if (pid == 0) {
                 cmd *cmd;
+                // if ((cmd->original = malloc(strlen(token) + 1)) == NULL) {
+                //     fprintf(stderr, "malloc fails");
+                // }
+                // strcpy(cmd->original, token);
                 cmd = cmd_init(token);
                 cmd_exec(cmd); 
             }
