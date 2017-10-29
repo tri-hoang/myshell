@@ -3,11 +3,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <sys/wait.h>
+#include <sys/resource.h>
 
 char *readline (const char *prompt);
 char *strip_whitespace(char *string);
 char **parse_input_command(char *string); 
+void sig_handler(int signo);
 // int BG_FLAG = 0;
 
 typedef struct {
@@ -155,9 +158,13 @@ void cmd_exec(cmd *cmd) {
     //      output: [["ls","-a",NULL],["ps", NULL], ["cat", "file", NULL]]
     if (cmd->size == 1) {
         if (cmd->BG_FLAG) {
-            if (fork() == 0) {
+            pid_t pid = fork();
+            if (pid == 0) {
                 char **test = parse_input_command(cmd->cmd_array[0]);
+
                 execvp(test[0], test);
+            } else {
+                printf("Process %d is running in background.\n", pid);
             }
         } else {
             char **test = parse_input_command(cmd->cmd_array[0]);
@@ -393,12 +400,50 @@ char *strip_whitespace(char *string) {
     return string;
 }
 
+void proc_exit()
+{
+        int wstat;
+        // union wait wstat;
+        pid_t   pid;
+
+        while (1) {
+            pid = wait3 (&wstat, WNOHANG, (struct rusage *)NULL );
+            // printf("1\n");
+            if (pid == 0) 
+                return;
+            else if (pid < 0) {
+                // fprintf(stderr, "Wait 3 error.\n");
+                return;
+            }
+            else if (pid > 0) {
+                //printf ("Return code: %d\n", wstat.w_retcode);
+                fprintf(stdout, "process terminated %d\nmyshell>\n", pid);
+                // printf("Child process terminated %d\nmyshell>\n", pid);
+            }
+        }
+}
+
+void sig_handler(int signo) {
+    if (signo == SIGINT) {
+        fprintf(stderr, "%s\n", "Interrupted");
+        return;
+    }
+    else if (signo == SIGCHLD) {
+        proc_exit();
+        // fprintf(stderr, "%s\n", );  
+    }
+}
+
 int main(int argc, char **argv) {
     while(1) {
+        signal(SIGINT, sig_handler);
+        
         char *lineInput = (char *)NULL;
         char *token;
         // read input from user
-        lineInput = readline("myshell>");
+        if (isatty(0) == 0) lineInput = readline("");
+        if (isatty(0) == 1) lineInput = readline("myshell>");
+        signal(SIGCHLD, sig_handler);
         // split user's input line with delimiter ";" into commands
         // i.e: given string:   this is a command ; this is another command 
         // -> output:           token = this is a command
@@ -421,6 +466,7 @@ int main(int argc, char **argv) {
                 cmd_exec(cmd); 
             }
             else {
+
                 waitpid(pid, &childStatus, WUNTRACED);
             }
         }
@@ -429,5 +475,6 @@ int main(int argc, char **argv) {
         token = NULL;
         free(lineInput);
         free(token);
+        if (isatty(0) == 0) return 0;
     }
 }
