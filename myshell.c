@@ -10,6 +10,7 @@
 char *readline (const char *prompt);
 char *strip_whitespace(char *string);
 char **parse_input_command(char *string); 
+void sig_handler(int signo);
 // int BG_FLAG = 0;
 
 typedef struct {
@@ -160,9 +161,10 @@ void cmd_exec(cmd *cmd) {
             pid_t pid = fork();
             if (pid == 0) {
                 char **test = parse_input_command(cmd->cmd_array[0]);
+
                 execvp(test[0], test);
             } else {
-                printf("%d\n", pid);
+                printf("Process %d is running in background.\n", pid);
             }
         } else {
             char **test = parse_input_command(cmd->cmd_array[0]);
@@ -406,16 +408,18 @@ void proc_exit()
 
         while (1) {
             pid = wait3 (&wstat, WNOHANG, (struct rusage *)NULL );
-            // if (pid == 0) {
-            //     printf("Exited");
-            //     return;
-            // }
-            // else 
-            if (pid == -1)
+            // printf("1\n");
+            if (pid == 0) 
                 return;
-            else
+            else if (pid < 0) {
+                // fprintf(stderr, "Wait 3 error.\n");
+                return;
+            }
+            else if (pid > 0) {
                 //printf ("Return code: %d\n", wstat.w_retcode);
-                fprintf(stdout, "Child process terminated %d\nmyshell>", pid);
+                fprintf(stdout, "process terminated %d\nmyshell>\n", pid);
+                // printf("Child process terminated %d\nmyshell>\n", pid);
+            }
         }
 }
 
