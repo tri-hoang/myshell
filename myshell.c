@@ -406,11 +406,12 @@ void proc_exit()
 
         while (1) {
             pid = wait3 (&wstat, WNOHANG, (struct rusage *)NULL );
-            if (pid == 0) {
-                printf("Exited");
-                return;
-            }
-            else if (pid == -1)
+            // if (pid == 0) {
+            //     printf("Exited");
+            //     return;
+            // }
+            // else 
+            if (pid == -1)
                 return;
             else
                 //printf ("Return code: %d\n", wstat.w_retcode);
@@ -436,7 +437,8 @@ int main(int argc, char **argv) {
         char *lineInput = (char *)NULL;
         char *token;
         // read input from user
-        lineInput = readline("myshell>");
+        if (isatty(0) == 0) lineInput = readline("");
+        if (isatty(0) == 1) lineInput = readline("myshell>");
         signal(SIGCHLD, sig_handler);
         // split user's input line with delimiter ";" into commands
         // i.e: given string:   this is a command ; this is another command 
@@ -460,9 +462,8 @@ int main(int argc, char **argv) {
                 cmd_exec(cmd); 
             }
             else {
-                int stat;
-                wait(&stat);
-                // waitpid(pid, &childStatus, WUNTRACED);
+
+                waitpid(pid, &childStatus, WUNTRACED);
             }
         }
         // free pointers and set to NULL after finish using..
@@ -470,5 +471,6 @@ int main(int argc, char **argv) {
         token = NULL;
         free(lineInput);
         free(token);
+        if (isatty(0) == 0) return 0;
     }
 }
