@@ -11,7 +11,7 @@ char *readline (const char *prompt);
 char *strip_whitespace(char *string);
 char **parse_input_command(char *string); 
 void sig_handler(int signo);
-// int BG_FLAG = 0;
+int cd(char **path);
 
 typedef struct {
     char **array;
@@ -29,6 +29,29 @@ typedef struct {
     int BG_FLAG;
 } cmd;
 
+void my_exec(char *cmd, char **args) {
+    if (strcmp(cmd, "cd") == 0) {
+        cd(args);
+    }
+    else {
+        execvp(cmd, args);
+    }
+}
+
+int cd(char **path) {
+    if (path[1] == NULL) {
+        fprintf(stderr, "cd error: input should be 'cd ..'\n");
+        return -1;
+    } 
+    else {
+        if (chdir(path[1]) == -1) {
+            fprintf(stderr, "chdir error\n");
+            return -1;
+        }    
+    }
+    return 0;
+}
+
 void exec_cmd_pipe(cmd *cmd) {
     int i, j, k, stat, nPipes = cmd->size - 1;
 
@@ -44,25 +67,12 @@ void exec_cmd_pipe(cmd *cmd) {
             if (i != 0) dup2(pipes[j-2], 0);
             for (k = 0; k < 2 * nPipes; k++) close(pipes[k]);
             char **cmd_p = parse_input_command(cmd->cmd_array[i]);
-            execvp(cmd_p[0], cmd_p);
+            my_exec(cmd_p[0], cmd_p);
         }
     }
     for (i = 0; i < 2 * nPipes; i++) close(pipes[i]);
     for (i = 0; i < nPipes; i++) wait(&stat);
 }
-
-// int is_BG(cmd *cmd) {
-//     printf("ISBG_1\n");
-//     char *input = strip_whitespace(cmd->input);
-//     char *output = strip_whitespace(cmd->output);
-//     char *error = strip_whitespace(cmd->error);
-//     printf("ISBG_2\n");
-//     if ((input != NULL && input[strlen(input) - 1] == '&')
-//         || (output != NULL && output[strlen(output) - 1] == '&')
-//         || (error != NULL && error[strlen(error) - 1] == '&'))
-//         return 1;
-//     return 0;
-// }
 
 int is_BG(cmd *cmd) {
     if (cmd->cmd_array[cmd->size - 1] != NULL) {
@@ -114,7 +124,6 @@ void cmd_exec(cmd *cmd) {
     /* Set output and input appropriately */
     int i = dup(0), o = dup(1);
     if (cmd->input != NULL) {
-        printf("INPUT\n");
         int fd = open ( cmd->input, O_RDONLY);
         // int save = dup(0);
         dup2(fd, 0);
@@ -122,13 +131,11 @@ void cmd_exec(cmd *cmd) {
         // dup2(save, 0);
     }
     else if (cmd->output != NULL) {
-        printf("OUTPUT\n");
         int fd = open ( cmd->output, O_APPEND | O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IXUSR);
         dup2(fd, 1);
         close(fd);
     }
     else if (cmd->error != NULL) {
-        printf("ERROR\n");
         int fd = open ( cmd->error, O_APPEND | O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IXUSR);
         dup2(fd, 2);
         close(fd);
@@ -142,10 +149,7 @@ void cmd_exec(cmd *cmd) {
 
     // // int BG_FLAG = 0;
     int stat;
-    printf("Check 1\n");
-    // printf("%s | %s | %s\n", cmd->input, cmd->output, cmd->error);
     cmd->BG_FLAG = is_BG(cmd);
-    printf("Check 2 %i\n", cmd->BG_FLAG);
     // char *lastCmd = strip_whitespace(cmd->cmd_array[cmd->size-1]);
     // // printf("%s\n", lastCmd);
     // if (lastCmd[strlen(lastCmd)-1] == '&') {
@@ -162,13 +166,13 @@ void cmd_exec(cmd *cmd) {
             if (pid == 0) {
                 char **test = parse_input_command(cmd->cmd_array[0]);
 
-                execvp(test[0], test);
+                my_exec(test[0], test);
             } else {
                 printf("Process %d is running in background.\n", pid);
             }
         } else {
             char **test = parse_input_command(cmd->cmd_array[0]);
-            execvp(test[0], test);
+            my_exec(test[0], test);
         }
         // wait(&stat);
     } else {
@@ -355,7 +359,6 @@ cmd *cmd_init(char *lineInput) {
         }
     }
 
-    printf("cmd->size is : %d\ncmd->output is : %s\ncmd->input is : %s\ncmd->error is : %s\n", cmd->size, cmd->output, cmd->input, cmd->error);
     // we don't need this anymore
     //char *arg;
     //while ((arg = strsep(&cmdArgs, " ")) != NULL) {
@@ -368,7 +371,6 @@ cmd *cmd_init(char *lineInput) {
     //   }
     //}
     //cmd->args[numArg] = NULL;
-    // printf("LINEINPUT:   %s\n", lineInput);
     return cmd;
 }
 
@@ -403,22 +405,17 @@ char *strip_whitespace(char *string) {
 void proc_exit()
 {
         int wstat;
-        // union wait wstat;
         pid_t   pid;
 
         while (1) {
             pid = wait3 (&wstat, WNOHANG, (struct rusage *)NULL );
-            // printf("1\n");
             if (pid == 0) 
                 return;
             else if (pid < 0) {
-                // fprintf(stderr, "Wait 3 error.\n");
                 return;
             }
             else if (pid > 0) {
-                //printf ("Return code: %d\n", wstat.w_retcode);
-                fprintf(stdout, "process terminated %d\nmyshell>\n", pid);
-                // printf("Child process terminated %d\nmyshell>\n", pid);
+                fprintf(stdout, "process %d terminated\nmyshell>\n", pid);
             }
         }
 }
@@ -430,7 +427,6 @@ void sig_handler(int signo) {
     }
     else if (signo == SIGCHLD) {
         proc_exit();
-        // fprintf(stderr, "%s\n", );  
     }
 }
 
@@ -458,10 +454,6 @@ int main(int argc, char **argv) {
             }
             else if (pid == 0) {
                 cmd *cmd;
-                // if ((cmd->original = malloc(strlen(token) + 1)) == NULL) {
-                //     fprintf(stderr, "malloc fails");
-                // }
-                // strcpy(cmd->original, token);
                 cmd = cmd_init(token);
                 cmd_exec(cmd); 
             }
