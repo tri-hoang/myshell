@@ -147,15 +147,9 @@ void cmd_exec(cmd *cmd) {
     }
 
 
-    // // int BG_FLAG = 0;
     int stat;
     cmd->BG_FLAG = is_BG(cmd);
-    // char *lastCmd = strip_whitespace(cmd->cmd_array[cmd->size-1]);
-    // // printf("%s\n", lastCmd);
-    // if (lastCmd[strlen(lastCmd)-1] == '&') {
-    //     printf("Is BG\n");
-    //     cmd->BG_FLAG = 1;
-    // }
+
 
     // parse_input_command will parse an array of string -> an array of string to be called by execvp
     // i.e: input: [["   ls -a "], ["ps"],["cat file "]]
@@ -181,8 +175,6 @@ void cmd_exec(cmd *cmd) {
 
     dup2(i, 0); dup2(o, 1);
 
-    // test -> function works .. need to add more to this (y)
-    //execvp(cmd->args[0], cmd->args);
 }
 
 // take a string input from user's command line input
@@ -195,20 +187,6 @@ void cmd_exec(cmd *cmd) {
 // - cmd->output is the path to redirect output (if none provided cmd->output = NULL)
 // - cmd->error is the path to redirect error (if none provided cmd->error = NULL)
 cmd *cmd_init(char *lineInput) {
-    // Set & flag
-    // char *cmdArgs2;
-    // if ((cmdArgs2 = malloc(strlen(lineInput) + 1)) == NULL) {
-    //     fprintf(stderr, "malloc fails");
-    // }
-    // strcpy(cmdArgs2, lineInput);
-    // cmdArgs2 = strip_whitespace(cmdArgs2);
-    // if (lineInput[strlen(lineInput)-1] == '&') BG_FLAG = 1;
-    // printf("%c\n", cmdArgs2[strlen(cmdArgs2)-1] );
-    // lineInput = strip_whitespace(lineInput);
-    // int i;
-    // while (lineInput[i] != '\0') i++;
-    // char a = lineInput[i - 1];
-
 
     char *cmdArgs;
     if ((cmdArgs = malloc(strlen(lineInput) + 1)) == NULL) {
@@ -224,7 +202,7 @@ cmd *cmd_init(char *lineInput) {
     const char o1_redirection[3] = "1>";
     const char oe_redirection[3] = "&>";
     int same_oe = 0;
-    // quick fix
+
     int *error_redir = malloc(sizeof(int));
     *error_redir = 0;
     // assume user will use only one of the four ">", "1>", "&>", "2>"
@@ -359,18 +337,6 @@ cmd *cmd_init(char *lineInput) {
         }
     }
 
-    // we don't need this anymore
-    //char *arg;
-    //while ((arg = strsep(&cmdArgs, " ")) != NULL) {
-        // might need fixing ..
-    //    char *emptyString = "";
-    //    if (strcmp(arg, emptyString) != 0) {
-    //        cmd->args[numArg] = arg;
-    //        numArg ++;
-    //        cmd->args = realloc(cmd->args, sizeof(char * ) * (numArg + 1));
-    //   }
-    //}
-    //cmd->args[numArg] = NULL;
     return cmd;
 }
 
